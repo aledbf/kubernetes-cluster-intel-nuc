@@ -1,0 +1,373 @@
+#cloud-config
+---
+
+hostname: ${NODE_NAME}
+
+users:
+  - name: "justincase"
+    passwd: "$1$KCgsldWw$VwOfUhBt3KqII.pse8r2l/"
+    groups:
+      - "sudo"
+      - "docker"
+
+ssh_authorized_keys:
+  - ${PUB_RSA}
+
+coreos:
+  update:
+    group: alpha
+    reboot-strategy: off
+  etcd2:
+    name: ${NODE_NAME}
+    advertise-client-urls: "http://${NODE_IP}:2379"
+    initial-cluster: "${ETCD_ENDPOINTS}"
+    initial-cluster-token: k8s-etcd-cluster
+    initial-cluster-state: new
+    initial-advertise-peer-urls: "http://${NODE_IP}:2380"
+    listen-peer-urls: "http://0.0.0.0:2380"
+    listen-client-urls: "http://0.0.0.0:2379"
+  units:
+  - name: etcd.service
+    mask: true
+  - name: etcd2.service
+    command: start
+  - name: 10-static.network
+    content: |
+      [Match]
+      Name=${NET_IFACE}
+
+      [Network]
+      Address=${NODE_IP}/24
+      Gateway=${NODE_GATEWAY}
+      DNS=8.8.8.8
+  - name: flanneld.service
+    command: start
+    drop-ins:
+      - name: 50-network-config.conf
+        content: |
+          [Unit]
+          Requires=etcd2.service
+          [Service]
+          ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{"Network":"${POD_NETWORK}","SubnetLen":20,"Backend": {"Type": "vxlan"} }'
+  - name: docker.socket
+    command: start
+  - name: docker-tcp.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Docker Socket for the API
+
+      [Socket]
+      ListenStream=2375
+      Service=docker.service
+      BindIPv6Only=both
+
+      [Install]
+      WantedBy=sockets.target
+  - name: docker.service
+    drop-ins:
+      - name: 10-require-flannel.conf
+        content: |
+          [Unit]
+          Requires=flanneld.service
+          After=flanneld.service
+      - name: 50-change-options.conf
+        content: |
+          [Service]
+          Environment='DOCKER_OPTS=-s=overlay --insecure-registry="0.0.0.0/0" --iptables=false --log-level=warn'
+  - name: kubelet.service
+    command: start
+    enable: true
+    content: |
+      [Service]
+      ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
+      ExecStartPre=/opt/bin/download-k8s-binary kubelet
+      ExecStart=/opt/bin/kubelet \
+        --api_servers=http://127.0.0.1:8080 \
+        --register-node=true \
+        --allow-privileged=true \
+        --config=/etc/kubernetes/manifests \
+        --hostname-override=${NODE_IP} \
+        --cluster_dns=${DNS_SERVICE_IP} \
+        --cluster_domain=cluster.local \
+        --cadvisor_port=4194 \
+        --healthz_bind_address=0.0.0.0 \
+        --max-pods=300 \
+        --healthz_port=10248
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  - name: k8s-manifest.service
+    command: start
+    content: |
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes
+      ExecStart=/usr/bin/tar -xpvf /etc/kubernetes/manifests.tar.gz -C /etc/kubernetes
+  - name: disable-transparent-huge-pages.service
+    command: start
+    content: |
+      [Unit]
+      Description=Disable Transparent Huge Pages
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c "until (echo 'Waiting for sys mount...' && cat /sys/kernel/mm/transparent_hugepage/enabled >/dev/null 2>&1); do sleep 1; done"
+      ExecStart=/bin/sh -c "echo never | tee /sys/kernel/mm/transparent_hugepage/enabled >/dev/null 2>&1"
+      ExecStart=/bin/sh -c "echo never | tee /sys/kernel/mm/transparent_hugepage/defrag >/dev/null 2>&1"
+  - name: wait-apiserver.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Wait for apiserver
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStartPre=/opt/bin/wupiao 127.0.0.1:8080
+      ExecStart=/bin/sh -c 'curl --silent -XPOST -d @/etc/kubernetes/manifests/kube-system.json http://127.0.0.1:8080/api/v1/namespaces'
+write_files:
+  - path: /etc/kubernetes/manifests/kube-apiserver.yaml
+    permissions: '0644'
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-apiserver
+        namespace: kube-system
+      spec:
+        hostNetwork: true
+        containers:
+        - name: kube-apiserver
+          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          command:
+          - /hyperkube
+          - apiserver
+          - --bind-address=0.0.0.0
+          - --etcd_servers=${ETCD_URL}
+          - --allow-privileged=true
+          - --service-cluster-ip-range=${SERVICE_IP_RANGE}
+          - --secure_port=443
+          - --admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
+          - --tls-cert-file=/etc/kubernetes/ssl/apiserver.pem
+          - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+          - --client-ca-file=/etc/kubernetes/ssl/ca.pem
+          - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+          ports:
+          - containerPort: 443
+            hostPort: 443
+            name: https
+          - containerPort: 8080
+            hostPort: 8080
+            name: local
+          volumeMounts:
+          - mountPath: /etc/kubernetes/ssl
+            name: ssl-certs-kubernetes
+            readOnly: true
+          - mountPath: /etc/ssl/certs
+            name: ssl-certs-host
+            readOnly: true
+        volumes:
+        - hostPath:
+            path: /etc/kubernetes/ssl
+          name: ssl-certs-kubernetes
+        - hostPath:
+            path: /usr/share/ca-certificates
+          name: ssl-certs-host
+  - path: /etc/kubernetes/manifests/kube-controller-manager.yaml
+    permissions: '0644'
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-controller-manager
+        namespace: kube-system
+      spec:
+        containers:
+        - name: kube-controller-manager
+          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          command:
+          - /hyperkube
+          - controller-manager
+          - --master=http://127.0.0.1:8080
+          - --service-account-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+          - --root-ca-file=/etc/kubernetes/ssl/ca.pem
+          livenessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /healthz
+              port: 10252
+            initialDelaySeconds: 15
+            timeoutSeconds: 1
+          volumeMounts:
+          - mountPath: /etc/kubernetes/ssl
+            name: ssl-certs-kubernetes
+            readOnly: true
+          - mountPath: /etc/ssl/certs
+            name: ssl-certs-host
+            readOnly: true
+        hostNetwork: true
+        volumes:
+        - hostPath:
+            path: /etc/kubernetes/ssl
+          name: ssl-certs-kubernetes
+        - hostPath:
+            path: /usr/share/ca-certificates
+          name: ssl-certs-host
+  - path: /etc/kubernetes/manifests/kube-podmaster.yaml
+    permissions: '0644'
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-podmaster
+        namespace: kube-system
+      spec:
+        hostNetwork: true
+        containers:
+        - name: scheduler-elector
+          image: gcr.io/google_containers/podmaster:1.1
+          command:
+          - /podmaster
+          - --etcd-servers=${ETCD_URL}
+          - --key=scheduler
+          - --source-file=/src/manifests/kube-scheduler.yaml
+          - --dest-file=/dst/manifests/kube-scheduler.yaml
+          volumeMounts:
+          - mountPath: /src/manifests
+            name: manifest-src
+            readOnly: true
+          - mountPath: /dst/manifests
+            name: manifest-dst
+        - name: controller-manager-elector
+          image: gcr.io/google_containers/podmaster:1.1
+          command:
+          - /podmaster
+          - --etcd-servers=${ETCD_URL}
+          - --key=controller
+          - --source-file=/src/manifests/kube-controller-manager.yaml
+          - --dest-file=/dst/manifests/kube-controller-manager.yaml
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+          - mountPath: /src/manifests
+            name: manifest-src
+            readOnly: true
+          - mountPath: /dst/manifests
+            name: manifest-dst
+        volumes:
+        - hostPath:
+            path: /srv/kubernetes/manifests
+          name: manifest-src
+        - hostPath:
+            path: /etc/kubernetes/manifests
+          name: manifest-dst
+  - path: /etc/kubernetes/manifests/kube-scheduler.yaml
+    permissions: '0644'
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-scheduler
+        namespace: kube-system
+      spec:
+        hostNetwork: true
+        containers:
+        - name: kube-scheduler
+          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          command:
+          - /hyperkube
+          - scheduler
+          - --master=http://127.0.0.1:8080
+          livenessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /healthz
+              port: 10251
+            initialDelaySeconds: 15
+            timeoutSeconds: 1
+  - path: /etc/kubernetes/manifests/kube-system.json
+    permissions: '0644'
+    content: |
+      {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+          "name": "kube-system"
+        }
+      }
+  - path: /etc/kubernetes/ssl/ca.pem
+    permissions: "0644"
+    owner: "root"
+    encoding: "base64"
+    content: |
+      ${CA_PEM}
+  - path: /etc/kubernetes/ssl/apiserver-key.pem
+    permissions: "0644"
+    owner: "root"
+    encoding: "base64"
+    content: |
+      ${APISERVER_KEY_PEM}
+  - path: /etc/kubernetes/ssl/apiserver.pem
+    permissions: "0644"
+    owner: "root"
+    encoding: "base64"
+    content: |
+      ${APISERVER_PEM}
+  - path: /etc/kubernetes/manifests.tar.gz
+    permissions: "0644"
+    owner: "root"
+    encoding: "base64"
+    content: |
+      ${MANIFESTS}
+  - path: /etc/systemd/coredump.conf
+    content: |
+      [Coredump]
+      Storage=none
+  - path: /etc/profile.d/nse-function.sh
+    permissions: '0755'
+    owner: core
+    content: |
+      function nse() {
+        docker exec -it $1 bash
+      }
+  - path: /home/core/.toolboxrc
+    owner: core
+    content: |
+      TOOLBOX_DOCKER_IMAGE=alpine
+      TOOLBOX_DOCKER_TAG=3.2
+      TOOLBOX_USER=root
+  - path: /opt/bin/download-k8s-binary
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      FILE=$1
+      if [ ! -f /opt/bin/$FILE ]; then
+        curl -sSL -o /opt/bin/$FILE https://storage.googleapis.com/kubernetes-release/release/${K8S_VER}/bin/linux/amd64/$FILE
+        chmod +x /opt/bin/$FILE
+      else
+        # we check the version of the binary
+        INSTALLED_VERSION=$(/opt/bin/$FILE --version=true)
+        MATCH=$(echo "$INSTALLED_VERSION" | grep -c "${K8S_VER}")
+        if [ $MATCH -eq 0 ]; then
+          # the version is different
+          curl -sSL -o /opt/bin/$FILE https://storage.googleapis.com/kubernetes-release/release/${K8S_VER}/bin/linux/amd64/$FILE
+          chmod +x /opt/bin/$FILE
+        fi
+      fi
+  - path: /opt/bin/wupiao
+    permissions: '0755'
+    owner: core
+    content: |
+      #!/usr/bin/env bash
+      # [w]ait [u]ntil [p]ort [i]s [a]ctually [o]pen
+      [ -n "$1" ] && \
+        until curl -o /dev/null -sIf http://$1; do \
+          sleep 1 && echo .;
+        done;
+      exit $?
+manage_etc_hosts: "localhost"
