@@ -36,6 +36,10 @@ coreos:
       Address=${NODE_IP}/24
       Gateway=${NODE_GATEWAY}
       DNS=8.8.8.8
+  - name: etcd.service
+    mask: true
+  - name: etcd2.service
+    command: start
   - name: flanneld.service
     command: start
   - name: docker-tcp.socket
@@ -81,7 +85,11 @@ coreos:
         --cadvisor_port=4194 \
         --healthz_bind_address=0.0.0.0 \
         --max-pods=300 \
-        --healthz_port=10248
+        --healthz_port=10248 \
+        --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml \
+        --tls-cert-file=/etc/kubernetes/ssl/worker.pem \
+        --tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem        
+
       Restart=always
       RestartSec=10
 
@@ -116,7 +124,7 @@ write_files:
           command:
           - /hyperkube
           - proxy
-          - --master=${CONTROLLER_ENDPOINT}
+          - --master=https://${NODE_START_IP}
           - --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml
           - --proxy-mode=iptables
           securityContext:

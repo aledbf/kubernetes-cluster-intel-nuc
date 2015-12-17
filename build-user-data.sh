@@ -39,7 +39,7 @@ export NODE_START_IP=10.4.0.2
 
 export NUMBER_NODES=4
 
-export NET_IFACE=enp0s3
+export NET_IFACE=enp3s0
 
 #-----------------------
 

@@ -27,10 +27,6 @@ coreos:
     listen-peer-urls: "http://0.0.0.0:2380"
     listen-client-urls: "http://0.0.0.0:2379"
   units:
-  - name: etcd.service
-    mask: true
-  - name: etcd2.service
-    command: start
   - name: 10-static.network
     content: |
       [Match]
@@ -40,6 +36,10 @@ coreos:
       Address=${NODE_IP}/24
       Gateway=${NODE_GATEWAY}
       DNS=8.8.8.8
+  - name: etcd.service
+    mask: true
+  - name: etcd2.service
+    command: start
   - name: flanneld.service
     command: start
     drop-ins:
@@ -148,6 +148,7 @@ write_files:
           command:
           - /hyperkube
           - apiserver
+          - --advertise-address=${NODE_START_IP}
           - --bind-address=0.0.0.0
           - --etcd_servers=${ETCD_URL}
           - --allow-privileged=true
