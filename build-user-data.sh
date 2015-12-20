@@ -2,7 +2,7 @@
 set -e
 
 # Specify the version (vX.Y.Z) of Kubernetes assets to deploy
-export K8S_VER=v1.1.2
+export K8S_VER=v1.1.3
 
 # The CIDR network to use for pod IPs.
 # Each pod launched in the cluster will be assigned an IP out of this range.
@@ -148,6 +148,9 @@ mkdir -p ssl
 ./lib/init-ca.sh ./ssl
 ./lib/init-ssl.sh ./ssl apiserver kube-controller $(buildSANIP)
 ./lib/init-ssl.sh ./ssl worker kube-worker
+
+echo "exporting cetificate to access apiserver from web browsers"
+openssl pkcs12 -export -clcerts -inkey ./ssl/worker-key.pem -in ./ssl/worker.pem -out ./ssl/worker.p12 -name "worker"
 
 CA_PEM=$(cat ./ssl/ca.pem | base64)
 APISERVER_KEY_PEM=$(cat ./ssl/apiserver-key.pem | base64)
