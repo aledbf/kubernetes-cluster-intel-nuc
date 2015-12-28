@@ -144,7 +144,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-apiserver
-          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          image: ${HYPERKUBE_IMAGE}:${K8S_VER}
           command:
           - /hyperkube
           - apiserver
@@ -159,6 +159,7 @@ write_files:
           - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
           - --client-ca-file=/etc/kubernetes/ssl/ca.pem
           - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+          - --runtime-config=extensions/v1beta1=true,extensions/v1beta1/daemonsets=true,extensions/v1beta1/thirdpartyresource=true
           ports:
           - containerPort: 443
             hostPort: 443
@@ -191,7 +192,7 @@ write_files:
       spec:
         containers:
         - name: kube-controller-manager
-          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          image: ${HYPERKUBE_IMAGE}:${K8S_VER}
           command:
           - /hyperkube
           - controller-manager
@@ -281,7 +282,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-scheduler
-          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          image: ${HYPERKUBE_IMAGE}:${K8S_VER}
           command:
           - /hyperkube
           - scheduler

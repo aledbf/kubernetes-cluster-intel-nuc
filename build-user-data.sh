@@ -2,7 +2,12 @@
 set -e
 
 # Specify the version (vX.Y.Z) of Kubernetes assets to deploy
-export K8S_VER=v1.1.3
+#export K8S_VER=v1.1.3
+#export HYPERKUBE_IMAGE=gcr.io/google_containers/hyperkube
+
+# Use alpha 1.2 version
+export K8S_VER=v1.2.0-alpha5
+export HYPERKUBE_IMAGE=aledbf/hyperkube
 
 # The CIDR network to use for pod IPs.
 # Each pod launched in the cluster will be assigned an IP out of this range.

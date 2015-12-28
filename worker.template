@@ -120,7 +120,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube:${K8S_VER}
+          image: ${HYPERKUBE_IMAGE}:${K8S_VER}
           command:
           - /hyperkube
           - proxy
