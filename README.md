@@ -3,6 +3,13 @@ Kubernetes cluster running on Intel NUC
 
 Based on https://github.com/coreos/coreos-kubernetes
 
+## Why?
+
+I need a portable Cluster :P
+
+![Final result 1](screenshots/result1.jpg)
+![Final result 2](screenshots/result2.jpg)
+
 ## Create configuration:
 
 customize network parameters and cluster size in `build-user-data.sh`
