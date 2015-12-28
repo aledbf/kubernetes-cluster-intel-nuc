@@ -88,8 +88,8 @@ coreos:
         --healthz-port=10248 \
         --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml \
         --tls-cert-file=/etc/kubernetes/ssl/worker.pem \
-        --tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem        
-
+        --tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem \
+        --host_network_sources="*"
       Restart=always
       RestartSec=10
 

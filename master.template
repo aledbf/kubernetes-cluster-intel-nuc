@@ -94,7 +94,8 @@ coreos:
         --cadvisor-port=4194 \
         --healthz-bind-address=0.0.0.0 \
         --max-pods=300 \
-        --healthz-port=10248
+        --healthz-port=10248 \
+        --host_network_sources="*"
       Restart=always
       RestartSec=10
 
