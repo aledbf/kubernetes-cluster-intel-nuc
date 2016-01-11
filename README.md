@@ -31,7 +31,7 @@ install CoreOS
 ```
 wget https://raw.githubusercontent.com/coreos/init/master/bin/coreos-install
 chmod +x coreos-install
-sudo ./coreos-install -d /dev/sda -v 899.1.0 -c /mnt/user-data-<node ip>
+sudo ./coreos-install -d /dev/sda -C stable -V 835.9.0 -c /mnt/user-data-<node ip>
 ```
 
 Reboot
@@ -114,3 +114,9 @@ kubectl create -f manifests/kube-ui-svc.yaml
 Now we can access `kube-ui` located in `https://10.4.0.2/api/v1/proxy/namespaces/kube-system/services/kube-ui/#/dashboard/`
 
 ![Image of kube-ui](screenshots/kube-ui.png)
+
+## TODO:
+- installation using TFTP (using a raspberry pi as server using https://github.com/pin/tftp)
+- no user intervention in installation
+- no internet connection for installation
+- 
