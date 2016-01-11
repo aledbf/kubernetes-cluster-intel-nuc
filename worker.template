@@ -67,6 +67,31 @@ coreos:
         content: |
           [Service]
           Environment='DOCKER_OPTS=-s=overlay --insecure-registry="0.0.0.0/0" --iptables=false --log-level=warn'
+  - name: docker-builder.service
+    content: |
+      [Unit]
+      Description=Docker to build images
+      After=network.target
+
+      [Service]
+      CPUShares=800
+      MemoryLimit=2G
+      BlockIOWeight=500
+      MountFlags=slave
+      LimitNOFILE=1048576
+      LimitNPROC=1048576
+      ExecStart=/usr/lib/coreos/dockerd daemon \
+        --log-level=warn \
+        --insecure-registry 0.0.0.0/0 \
+        -H unix:///var/run/docker-builder.sock \
+        --exec-root=/var/run/docker-builder \
+        --graph=/var/lib/docker-builder \
+        --storage-driver=overlay
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
   - name: kubelet.service
     command: start
     enable: true
