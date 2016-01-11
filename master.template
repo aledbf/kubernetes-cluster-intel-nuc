@@ -20,7 +20,7 @@ coreos:
   etcd2:
     name: ${NODE_NAME}
     advertise-client-urls: "http://${NODE_IP}:2379"
-    initial-cluster: "${ETCD_ENDPOINTS}"
+    initial-cluster: "${NODE_NAME}=http://${NODE_IP}:2380"
     initial-cluster-token: k8s-etcd-cluster
     initial-cluster-state: new
     initial-advertise-peer-urls: "http://${NODE_IP}:2380"
