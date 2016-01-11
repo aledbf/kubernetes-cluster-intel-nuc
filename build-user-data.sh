@@ -93,7 +93,8 @@ function buildSANIP {
     url+="IP.$count=$a.$b.$c.$ip,"
     count+=1
   done
-
+  url+="IP.$count=$K8S_SERVICE_IP"
+  
   echo $url |sed 's/,$//'
 }
 

@@ -5,7 +5,7 @@ Based on https://github.com/coreos/coreos-kubernetes
 
 ## Why?
 
-I need a portable Cluster :P
+I need a portable Cluster :P 
 
 ![Final result 1](screenshots/result1.jpg)
 ![Final result 2](screenshots/result2.jpg)
@@ -56,7 +56,7 @@ NAME       LABELS                            STATUS    AGE
 
 ## Client certificate installation
 
-To access the apiserver url (https://10.4.0.2) we need a client certificate. Without one we see this:
+To access the apiserver url (https://10.4.0.2) we need a client certificate. Without one we will see this error:
 ```
 $ curl https://10.4.0.2/ -v
 *   Trying 10.4.0.2...
