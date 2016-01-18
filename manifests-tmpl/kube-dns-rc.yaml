@@ -8,7 +8,7 @@ metadata:
     version: v10
     kubernetes.io/cluster-service: "true"
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     k8s-app: kube-dns
     version: v10
@@ -71,7 +71,7 @@ spec:
         - -machines=http://127.0.0.1:4001
         - -addr=0.0.0.0:53
         - -ns-rotate=false
-        - "-domain=cluster.local"
+        - -domain=cluster.local.
         ports:
         - containerPort: 53
           name: dns
