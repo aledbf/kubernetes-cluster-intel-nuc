@@ -45,6 +45,7 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = kubernetes
 DNS.2 = kubernetes.default
+DNS.3 = kubernetes.default.svc
 "
 echo "Generating SSL artifacts in $OUTDIR"
 
